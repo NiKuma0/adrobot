@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Adrobot — campaign</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/themes/base/jquery-ui.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/jquery-ui.min.js"></script>
+<style>
+  body { font-family: sans-serif; max-width: 900px; margin: 20px auto; padding: 0 16px; }
+  button { padding: 4px 10px; cursor: pointer; }
+  .stream { border: 1px solid #ccc; padding: 10px; margin: 12px 0; }
+  .stream.dirty { background: #fff7cc; border-color: #e0c000; }
+  .stream table { border-collapse: collapse; margin: 8px 0; }
+  .stream td { padding: 3px 10px 3px 0; }
+  tr.removed td { color: #999; }
+  tr.new td:first-child::after { content: " (new)"; color: #a80; }
+  .share { width: 48px; text-align: right; font-weight: bold; }
+  .muted { color: #888; }
+  #error { color: #c00; }
+</style>
+</head>
+<body>
+<p><a href="/">&larr; back</a></p>
+<h2 id="title">Campaign</h2>
+<button id="fetch">Fetch streams</button>
+<span class="muted" id="synced"></span>
+<p id="error"></p>
+<div id="streams"></div>
+
+<script>
+const campaignId = location.pathname.split('/').pop();
+
+function api(method, url, body) {
+  $('#error').text('');
+  return $.ajax({url, method, contentType: 'application/json', data: body ? JSON.stringify(body) : undefined})
+    .fail(x => {
+      const d = x.responseJSON?.detail;
+      $('#error').text('Error: ' + (typeof d === 'string' ? d : JSON.stringify(d ?? x.statusText)));
+    });
+}
+
+function renderCampaign(c) {
+  $('#title').text(c.name + ' (#' + c.keitaro_id + ', ' + c.alias + ')');
+  $('#synced').text(c.synced_at ? 'last fetch: ' + c.synced_at : '');
+  $('#streams').empty();
+  c.streams.forEach(s => $('#streams').append(renderStream(s)));
+}
+
+function renderStream(s) {
+  const $s = $('<div class="stream">').attr('id', 'stream-' + s.id).toggleClass('dirty', s.is_dirty);
+  $s.append($('<b>').text(s.name), $('<span class="muted">').text(' #' + s.keitaro_id + (s.is_dirty ? ' — not published' : '')));
+
+  // flows without offers (e.g. the geo redirect) are shown as is, without details
+  if (!s.offers.length) return $s;
+
+  const $t = $('<table>');
+  s.offers.forEach(o => {
+    const removed = o.state === 'removed';
+    const $btn = removed
+      ? $('<button>').text('Bring back').on('click', () => api('POST', '/api/stream-offers/' + o.id + '/bring-back').done(replaceStream))
+      : $('<button>').text('Remove').on('click', () => api('POST', '/api/stream-offers/' + o.id + '/remove').done(replaceStream));
+    const $pin = $('<label>').append(
+      $('<input type="checkbox">').prop('checked', o.pinned).prop('disabled', removed)
+        .on('change', e => api('POST', '/api/stream-offers/' + o.id + '/pin', {pinned: e.target.checked}).done(replaceStream)),
+      ' pin');
+    $t.append($('<tr>').toggleClass('removed', removed).toggleClass('new', o.is_new).append(
+      $('<td>').text('[' + o.offer_id + '] ' + o.offer_name),
+      $('<td class="share">').text(o.share + '%'),
+      $('<td>').append($pin),
+      $('<td>').append($btn)));
+  });
+  $s.append($t);
+
+  const $offer = $('<input placeholder="offer ID or name" style="width:300px">');
+  let offerId = null;
+  $offer.autocomplete({
+    minLength: 0,
+    source: (req, resp) => $.getJSON('/api/offers', {q: req.term},
+      data => resp(data.map(o => ({label: '[' + o.id + '] ' + o.name, value: o.id})))),
+    select: (e, ui) => { offerId = ui.item.value; $offer.val(ui.item.label); return false; },
+  }).on('focus', function () { $(this).autocomplete('search', $(this).val()); })
+    .on('input', () => { offerId = null; });
+
+  $s.append($('<div>').append(
+    $offer, ' ',
+    $('<button>').text('Add offer').on('click', () => {
+      if (!offerId) { $('#error').text('Выберите оффер из списка'); return; }
+      api('POST', '/api/streams/' + s.id + '/offers', {offer_id: offerId}).done(replaceStream);
+    }),
+    ' ',
+    $('<button>').text('Push to Keitaro').prop('disabled', !s.is_dirty)
+      .on('click', () => api('POST', '/api/streams/' + s.id + '/publish').done(replaceStream)),
+    ' ',
+    $('<button>').text('Cancel').prop('disabled', !s.is_dirty)
+      .on('click', () => api('POST', '/api/streams/' + s.id + '/cancel').done(replaceStream)),
+  ));
+  return $s;
+}
+
+function replaceStream(s) {
+  $('#stream-' + s.id).replaceWith(renderStream(s));
+}
+
+$('#fetch').on('click', () => api('POST', '/api/campaigns/' + campaignId + '/fetch').done(renderCampaign));
+
+$.getJSON('/api/campaigns/' + campaignId).done(renderCampaign).fail(x => {
+  if (x.status === 404) $('#title').text('Campaign #' + campaignId + ' — press "Fetch streams" to load it from Keitaro');
+});
+</script>
+</body>
+</html>

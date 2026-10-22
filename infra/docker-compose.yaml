@@ -1,0 +1,73 @@
+name: adrobot
+
+# Settings shared by the app and the one-off migration job
+x-app: &app
+  image: adrobot:${APP_VERSION:-latest}
+  build:
+    context: ..
+    dockerfile: infra/Dockerfile
+  environment:
+    KEITARO_URL: ${KEITARO_URL:?set KEITARO_URL in infra/.env}
+    KEITARO_API_KEY: ${KEITARO_API_KEY:?set KEITARO_API_KEY in infra/.env}
+    DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    DEFAULT_GROUP_ID: ${DEFAULT_GROUP_ID:-}
+    DEFAULT_TRAFFIC_SOURCE_ID: ${DEFAULT_TRAFFIC_SOURCE_ID:-}
+    DEFAULT_DOMAIN_ID: ${DEFAULT_DOMAIN_ID:-}
+    GEO_REDIRECT_URL: ${GEO_REDIRECT_URL:-https://google.com}
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  networks: [backend]
+  logging: &logging
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in infra/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in infra/.env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in infra/.env}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks: [backend]
+    logging: *logging
+
+  migrate:
+    <<: *app
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    <<: *app
+    restart: unless-stopped
+    ports:
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
+
+networks:
+  backend:

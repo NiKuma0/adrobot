@@ -1,0 +1,46 @@
+- generic [active] [ref=e1]:
+  - paragraph [ref=e2]:
+    - link "← back" [ref=e3] [cursor=pointer]:
+      - /url: /
+  - heading "adrobot-test (#191831, adrobot-test-ddf746)" [level=2] [ref=e4]
+  - button "Fetch streams" [ref=e5] [cursor=pointer]
+  - text: "last fetch: 2026-10-20T17:06:21"
+  - paragraph
+  - generic [ref=e6]:
+    - generic [ref=e7]: "Flow 1 #1202575"
+    - generic [ref=e8]:
+      - text: "Flow 2 #1202576"
+      - table [ref=e9]:
+        - row [ref=e10]:
+          - cell "[3749] Miaflow [BEAUTY-RO-BE_0009] [pl - - spin ro -] 2. Основной, Румыния JS" [ref=e11]
+          - cell "50%" [ref=e12]
+          - cell [ref=e13]:
+            - generic [ref=e14]:
+              - checkbox "pin" [checked] [ref=e15]
+              - text: pin
+          - cell [ref=e16]:
+            - button "Remove" [ref=e17] [cursor=pointer]
+        - row [ref=e18]:
+          - cell "[3717] Miaflow [BEAUTY-RO-BE_0008] [pl - - prize ro -] 1. Основной, Румыния JS" [ref=e19]
+          - cell "50%" [ref=e20]
+          - cell [ref=e21]:
+            - generic [ref=e22]:
+              - checkbox "pin" [ref=e23]
+              - text: pin
+          - cell [ref=e24]:
+            - button "Remove" [ref=e25] [cursor=pointer]
+        - row [ref=e26]:
+          - cell "[3754] Miaflow [BEAUTY-CZ-BE_0007] [land 50% popup timer cz -] 1. Основной, Чехия JS" [ref=e27]
+          - cell "0%" [ref=e28]
+          - cell [ref=e29]:
+            - generic [ref=e30]:
+              - checkbox "pin" [disabled] [ref=e31]
+              - text: pin
+          - cell [ref=e32]:
+            - button "Bring back" [ref=e33] [cursor=pointer]
+      - generic [ref=e34]:
+        - textbox "offer ID or name" [ref=e35]
+        - button "Add offer" [ref=e36] [cursor=pointer]
+        - button "Push to Keitaro" [disabled] [ref=e37] [cursor=pointer]
+        - button "Cancel" [disabled] [ref=e38] [cursor=pointer]
+  - status [ref=e39]

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Adrobot</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/themes/base/jquery-ui.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/jquery-ui.min.js"></script>
+<style>
+  body { font-family: sans-serif; max-width: 760px; margin: 20px auto; padding: 0 16px; }
+  table.form td { padding: 4px 8px 4px 0; }
+  input, select { width: 320px; padding: 4px; }
+  button { padding: 6px 14px; cursor: pointer; }
+  .error { color: #c00; }
+  .ok { color: #070; }
+  #campaigns td { padding: 2px 8px 2px 0; }
+</style>
+</head>
+<body>
+<h2>New campaign</h2>
+<form id="create">
+  <table class="form">
+    <tr><td>Name</td><td><input name="name" required placeholder="имя кампании"></td></tr>
+    <tr><td>Geo</td><td><input name="geo" required placeholder="MX,AU,RO"></td></tr>
+    <tr><td>Offer</td><td>
+      <input id="offer" required placeholder="поиск по офферам (ID или название)">
+      <input type="hidden" name="offer_id">
+    </td></tr>
+    <tr><td>Group</td><td><select name="group_id"></select></td></tr>
+    <tr><td>Source</td><td><select name="traffic_source_id"></select></td></tr>
+    <tr><td>Domain</td><td><select name="domain_id"></select></td></tr>
+  </table>
+  <button type="submit">Create</button>
+  <span id="create-result"></span>
+</form>
+
+<h2>Edit existing campaign</h2>
+<form id="open">
+  <input name="id" type="number" placeholder="Keitaro campaign ID" required style="width:200px">
+  <button type="submit">Open</button>
+</form>
+<table id="campaigns"></table>
+
+<script>
+function fillSelect($sel, items, def) {
+  $sel.append($('<option>').val('').text('— default (' + (def ?? 'none') + ') —'));
+  items.forEach(i => $sel.append($('<option>').val(i.id).text(i.name + ' [' + i.id + ']')));
+  if (def && items.some(i => i.id == def)) $sel.val(def);
+}
+
+$.getJSON('/api/meta', m => {
+  fillSelect($('[name=group_id]'), m.groups, m.defaults.group_id);
+  fillSelect($('[name=traffic_source_id]'), m.traffic_sources, m.defaults.traffic_source_id);
+  fillSelect($('[name=domain_id]'), m.domains, m.defaults.domain_id);
+});
+
+$('#offer').autocomplete({
+  minLength: 0,
+  source: (req, resp) => $.getJSON('/api/offers', {q: req.term},
+    data => resp(data.map(o => ({label: '[' + o.id + '] ' + o.name, value: o.id})))),
+  select: (e, ui) => {
+    $('[name=offer_id]').val(ui.item.value);
+    $('#offer').val(ui.item.label);
+    return false;
+  },
+}).on('focus', function () { $(this).autocomplete('search', $(this).val()); })
+  .on('input', () => $('[name=offer_id]').val(''));
+
+$('#create').on('submit', e => {
+  e.preventDefault();
+  const f = Object.fromEntries(new FormData(e.target));
+  if (!f.offer_id) { $('#create-result').attr('class', 'error').text('Выберите оффер из списка'); return; }
+  const body = {name: f.name, geo: f.geo, offer_id: +f.offer_id};
+  ['group_id', 'traffic_source_id', 'domain_id'].forEach(k => { if (f[k]) body[k] = +f[k]; });
+  $('#create-result').attr('class', '').text('Creating…');
+  $.ajax({url: '/api/campaigns', method: 'POST', contentType: 'application/json', data: JSON.stringify(body)})
+    .done(c => $('#create-result').attr('class', 'ok').html(
+      'Created: <a href="/campaigns/' + c.keitaro_id + '">' + $('<b>').text(c.name).html() + ' (#' + c.keitaro_id + ')</a>'))
+    .fail(x => $('#create-result').attr('class', 'error').text(errorText(x)));
+});
+
+$('#open').on('submit', e => {
+  e.preventDefault();
+  location.href = '/campaigns/' + e.target.id.value;
+});
+
+$.getJSON('/api/keitaro/campaigns', list => {
+  list.forEach(c => $('#campaigns').append(
+    $('<tr>').append(
+      $('<td>').text(c.id),
+      $('<td>').append($('<a>').attr('href', '/campaigns/' + c.id).text(c.name)),
+      $('<td>').text(c.alias))));
+});
+
+function errorText(xhr) {
+  const d = xhr.responseJSON?.detail;
+  return 'Error: ' + (typeof d === 'string' ? d : JSON.stringify(d ?? xhr.statusText));
+}
+</script>
+</body>
+</html>
